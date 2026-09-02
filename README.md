@@ -76,3 +76,9 @@ npm run test:task2
 npm run test:task3
 npm run test:task4
 ```
+
+### Interactive Demonstrations
+Run live, colorized end-to-end demonstrations with full request/response wire inspections:
+```bash
+npm run demo:task1
+```
