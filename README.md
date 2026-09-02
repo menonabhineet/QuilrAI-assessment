@@ -81,4 +81,5 @@ npm run test:task4
 Run live, colorized end-to-end demonstrations with full request/response wire inspections:
 ```bash
 npm run demo:task1
+npm run demo:task2
 ```
