@@ -82,4 +82,5 @@ Run live, colorized end-to-end demonstrations with full request/response wire in
 ```bash
 npm run demo:task1
 npm run demo:task2
+npm run demo:task3
 ```

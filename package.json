@@ -12,7 +12,8 @@
     "test:task3": "vitest run task-3-streaming-guardrail/tests",
     "test:task4": "vitest run task-4-resilient-router/tests",
     "demo:task1": "tsx task-1-mcp-server/demo.ts",
-    "demo:task2": "tsx task-2-mcp-gateway/demo.ts"
+    "demo:task2": "tsx task-2-mcp-gateway/demo.ts",
+    "demo:task3": "tsx task-3-streaming-guardrail/demo.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.6.1",
