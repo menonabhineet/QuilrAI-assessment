@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true
+  },
+  "include": [
+    "task-1-mcp-server/**/*.ts",
+    "task-2-mcp-gateway/**/*.ts",
+    "task-3-streaming-guardrail/**/*.ts",
+    "task-4-resilient-router/**/*.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

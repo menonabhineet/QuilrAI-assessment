@@ -1,0 +1,25 @@
+{
+  "name": "quilrai-fde-assessment",
+  "version": "1.0.0",
+  "description": "Production-grade MCP servers, security gateways, streaming guardrails, and resilient LLM routers",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:task1": "vitest run task-1-mcp-server/tests",
+    "test:task2": "vitest run task-2-mcp-gateway/tests",
+    "test:task3": "vitest run task-3-streaming-guardrail/tests",
+    "test:task4": "vitest run task-4-resilient-router/tests"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.6.1",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.8",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.7"
+  }
+}
