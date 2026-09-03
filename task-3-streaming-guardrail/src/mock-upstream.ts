@@ -3,6 +3,8 @@ import http from "http";
 export interface MockStreamScenario {
   chunks: string[];
   delayMs?: number;
+  format?: "content" | "openai";
+  includeDoneSentinel?: boolean;
 }
 
 export const DEFAULT_STREAM_SCENARIO: MockStreamScenario = {
@@ -53,15 +55,22 @@ export class MockUpstreamLlmServer {
 
         const chunks = [...this.currentScenario.chunks];
         const delay = this.currentScenario.delayMs ?? 10;
+        const format = this.currentScenario.format ?? "content";
 
         const sendNext = () => {
           if (chunks.length === 0) {
+            if (this.currentScenario.includeDoneSentinel) {
+              res.write("data: [DONE]\n\n");
+            }
             res.end();
             return;
           }
 
           const chunk = chunks.shift()!;
-          const payload = JSON.stringify({ content: chunk });
+          const payload =
+            format === "openai"
+              ? JSON.stringify({ choices: [{ delta: { content: chunk } }] })
+              : JSON.stringify({ content: chunk });
           res.write(`data: ${payload}\n\n`);
 
           if (delay > 0) {

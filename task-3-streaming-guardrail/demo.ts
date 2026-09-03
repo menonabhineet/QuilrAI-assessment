@@ -44,8 +44,19 @@ async function streamRequest(gatewayUrl: string, scenarioName: string): Promise<
         if (jsonStr && jsonStr !== "[DONE]") {
           try {
             const parsed = JSON.parse(jsonStr);
+            let content: string | undefined;
             if (parsed && typeof parsed.content === "string") {
-              const content = parsed.content;
+              content = parsed.content;
+            } else if (
+              parsed &&
+              Array.isArray(parsed.choices) &&
+              parsed.choices[0]?.delta &&
+              typeof parsed.choices[0].delta.content === "string"
+            ) {
+              content = parsed.choices[0].delta.content;
+            }
+
+            if (content) {
               chunkCount++;
               if (chunkCount === 1) {
                 firstChunkTime = Date.now() - startTime;
@@ -108,6 +119,24 @@ async function runDemo() {
   };
   upstream.setScenario(splitBeforeAtScenario);
   await streamRequest(gatewayUrl, "Pre-@ split token test");
+
+  // Scenario 3: Standard OpenAI streaming delta schema with terminal [DONE] sentinel
+  console.log("-------------------------------------------------------");
+  console.log("Scenario 3: Standard OpenAI streaming schema (choices[0].delta.content) + [DONE]");
+  console.log("-------------------------------------------------------");
+  const openAiScenario: MockStreamScenario = {
+    delayMs: 20,
+    format: "openai",
+    includeDoneSentinel: true,
+    chunks: [
+      "Here is the support lead: sarah.connor",
+      "@cyberdyne.org, and SSN on record: 555-",
+      "01-",
+      "9999.",
+    ],
+  };
+  upstream.setScenario(openAiScenario);
+  await streamRequest(gatewayUrl, "OpenAI delta streaming schema");
 
   console.log("=======================================================");
   console.log("  Demo Complete: Verified Real-Time Streaming & Redaction!");

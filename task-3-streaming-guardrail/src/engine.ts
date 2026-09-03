@@ -24,7 +24,7 @@ export class PiiRedactionEngine {
   public static readonly CC_REGEX = /\b(?:\d{4}[- ]){3}\d{1,4}\b|\b\d{13,16}\b/g;
 
   // Tail candidate pattern: detects potentially incomplete sensitive prefixes at chunk boundary
-  public static readonly PARTIAL_TAIL_REGEX = /(?:[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]*|[a-zA-Z0-9._%+-]+|\b\d{1,4}(?:[- ]\d{0,4}){0,3})$/;
+  public static readonly PARTIAL_TAIL_REGEX = /(?:[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]*|\b[a-zA-Z0-9_%+-]+(?:\.[a-zA-Z0-9_%+-]+)*|\b\d{1,4}(?:[- ]\d{0,4}){0,3})$/;
 
   constructor(maxLookback = 48) {
     this.maxLookback = maxLookback;

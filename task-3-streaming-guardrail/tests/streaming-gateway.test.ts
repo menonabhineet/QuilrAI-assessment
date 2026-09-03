@@ -133,4 +133,91 @@ describe("Task 3: Streaming Guardrail Gateway End-to-End Integration", () => {
     expect(fullText).toBe("System cluster overview: Nodes: 12 active, CPU utilization: 24.5%, Storage healthy.");
     expect(fullText).not.toContain("[REDACTED]");
   });
+
+  it("flushes tail buffer before emitting data: [DONE] sentinel", async () => {
+    upstreamServer.setScenario({
+      delayMs: 5,
+      chunks: [
+        "Confidential direct contact: alice.smith",
+        "@company.org is verified.",
+      ],
+      includeDoneSentinel: true,
+    });
+
+    const response = await fetch(gatewayUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: "Contact lookup" }),
+    });
+
+    const rawText = await response.text();
+    const events = rawText
+      .split("\n\n")
+      .map((s) => s.trim())
+      .filter((s) => s.startsWith("data: "));
+
+    expect(events.length).toBeGreaterThan(1);
+
+    // The very last event MUST be the [DONE] sentinel
+    const lastEvent = events[events.length - 1];
+    expect(lastEvent).toBe("data: [DONE]");
+
+    // The event before [DONE] must not be [DONE]
+    const secondToLast = events[events.length - 2];
+    expect(secondToLast).not.toBe("data: [DONE]");
+
+    // Combine all content before [DONE]
+    let reconstructed = "";
+    for (let i = 0; i < events.length - 1; i++) {
+      const json = JSON.parse(events[i].slice(6));
+      reconstructed += json.content;
+    }
+
+    expect(reconstructed).toContain("Confidential direct contact: [REDACTED] is verified.");
+    expect(reconstructed).not.toContain("alice.smith@company.org");
+  });
+
+  it("redacts PII when upstream streams in standard OpenAI delta schema", async () => {
+    upstreamServer.setScenario({
+      delayMs: 5,
+      format: "openai",
+      includeDoneSentinel: true,
+      chunks: [
+        "Customer email is ",
+        "alex.jones",
+        "@fintech.io and SSN is 123-",
+        "45-",
+        "6789.",
+      ],
+    });
+
+    const response = await fetch(gatewayUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: "OpenAI stream lookup" }),
+    });
+
+    const rawText = await response.text();
+    const events = rawText
+      .split("\n\n")
+      .map((s) => s.trim())
+      .filter((s) => s.startsWith("data: "));
+
+    let reconstructed = "";
+    for (const evt of events) {
+      const payloadStr = evt.slice(6).trim();
+      if (payloadStr === "[DONE]") continue;
+
+      const parsed = JSON.parse(payloadStr);
+      expect(parsed.choices).toBeDefined();
+      expect(parsed.choices[0].delta).toBeDefined();
+      if (parsed.choices[0].delta.content) {
+        reconstructed += parsed.choices[0].delta.content;
+      }
+    }
+
+    expect(reconstructed).toBe("Customer email is [REDACTED] and SSN is [REDACTED].");
+    expect(reconstructed).not.toContain("alex.jones@fintech.io");
+    expect(reconstructed).not.toContain("123-45-6789");
+  });
 });

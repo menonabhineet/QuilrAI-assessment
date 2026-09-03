@@ -64,6 +64,17 @@ export class StreamingGuardrailGateway {
 
         // Forward request body if any
         clientReq.pipe(upstreamReq);
+
+        // Terminate upstream LLM generation if client disconnects prematurely
+        clientReq.on("aborted", () => {
+          upstreamReq.destroy();
+        });
+
+        clientRes.on("close", () => {
+          if (!clientRes.writableFinished) {
+            upstreamReq.destroy();
+          }
+        });
       });
 
       this.server.listen(this.port, () => {

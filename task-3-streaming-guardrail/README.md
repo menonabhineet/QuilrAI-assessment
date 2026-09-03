@@ -10,8 +10,13 @@ Real-time streaming PII redaction proxy gateway for LLM completion endpoints. In
 - **Full Document Buffering (Naive Approach)**: Accumulating the entire LLM response until the stream terminates destroys streaming UX, creates unbounded memory consumption proportional to context length, and drastically spikes TTFT.
 - **Stateless Chunk Redaction (Naive Approach)**: Regex matching against isolated individual chunks fails when sensitive data is split across chunk boundaries (e.g. chunk 1 ends with `john.doe@` and chunk 2 starts with `example.com`).
 
-### Server-Sent Events (SSE) Protocol Awareness
-The gateway operates strictly on the JSON data deltas inside Server-Sent Events (SSE). Rather than blindly redacting raw TCP chunks (which risks corrupting JSON syntax or SSE framing), the transform stream includes a lightweight SSE parser. It extracts the `content` delta, feeds only the text to the `PiiRedactionEngine`, and safely reconstructs the JSON frame before pushing downstream. This guarantees both semantic accuracy and protocol integrity.
+### Server-Sent Events (SSE) Protocol Awareness & Multi-Schema Support
+The gateway operates strictly on the JSON data deltas inside Server-Sent Events (SSE). Rather than blindly redacting raw TCP chunks (which risks corrupting JSON syntax or SSE framing), the transform stream includes a lightweight SSE parser with multi-schema LLM support:
+- **OpenAI Streaming Format**: Operates on `choices[0].delta.content`, preserving the full response structure.
+- **Anthropic Streaming Format**: Operates on `delta.text`.
+- **Proprietary/Simple Format**: Operates on `{ content: string }`.
+- **Terminal Sentinel Integrity**: When the upstream sends `data: [DONE]`, any unredacted trailing characters in the buffer are flushed in a final schema-compliant delta event *before* pushing the terminal `data: [DONE]` sentinel. This guarantees zero orphaned tokens and correct protocol ordering.
+- **Client Cancellation Teardown**: If the downstream client terminates the HTTP connection prematurely, the gateway triggers immediate `upstreamReq.destroy()` to prevent wasted LLM token generation.
 
 ### The Solution: O(1) Bounded Rolling Window State
 The `PiiRedactionEngine` uses a small sliding window buffer (default 48 characters) that operates as follows:
@@ -21,7 +26,7 @@ The `PiiRedactionEngine` uses a small sliding window buffer (default 48 characte
 4. **Immediate Safe Prefix Emission**:
    - Everything preceding the ambiguous tail is guaranteed safe and emitted immediately to the client.
    - Only the ambiguous suffix (at most 48 characters) is retained in `buffer` for the next chunk.
-5. **Stream Termination Flush**: When the upstream closes the stream, `flush()` performs a final pass on the remaining buffer and flushes out the final tokens.
+5. **Stream Termination Flush**: When the upstream closes the stream or emits `[DONE]`, `flush()` performs a final pass on the remaining buffer and emits the final tokens before ending the stream.
 
 This architecture guarantees:
 - **Zero Full-Response Memory Accumulation**: Memory consumption is strictly bounded at `O(1)` regardless of whether the LLM generates 100 tokens or 100,000 tokens.
