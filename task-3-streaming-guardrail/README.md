@@ -10,6 +10,9 @@ Real-time streaming PII redaction proxy gateway for LLM completion endpoints. In
 - **Full Document Buffering (Naive Approach)**: Accumulating the entire LLM response until the stream terminates destroys streaming UX, creates unbounded memory consumption proportional to context length, and drastically spikes TTFT.
 - **Stateless Chunk Redaction (Naive Approach)**: Regex matching against isolated individual chunks fails when sensitive data is split across chunk boundaries (e.g. chunk 1 ends with `john.doe@` and chunk 2 starts with `example.com`).
 
+### Server-Sent Events (SSE) Protocol Awareness
+The gateway operates strictly on the JSON data deltas inside Server-Sent Events (SSE). Rather than blindly redacting raw TCP chunks (which risks corrupting JSON syntax or SSE framing), the transform stream includes a lightweight SSE parser. It extracts the `content` delta, feeds only the text to the `PiiRedactionEngine`, and safely reconstructs the JSON frame before pushing downstream. This guarantees both semantic accuracy and protocol integrity.
+
 ### The Solution: O(1) Bounded Rolling Window State
 The `PiiRedactionEngine` uses a small sliding window buffer (default 48 characters) that operates as follows:
 1. **Combine Active Window**: Concatenates previous partial tail buffer with incoming chunk: `window = buffer + chunk`.

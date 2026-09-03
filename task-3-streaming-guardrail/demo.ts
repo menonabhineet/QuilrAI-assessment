@@ -24,6 +24,7 @@ async function streamRequest(gatewayUrl: string, scenarioName: string): Promise<
 
   const decoder = new TextDecoder();
   let fullRedactedOutput = "";
+  let sseBuffer = "";
 
   while (true) {
     const { done, value } = await reader.read();
@@ -32,19 +33,39 @@ async function streamRequest(gatewayUrl: string, scenarioName: string): Promise<
     const chunkText = decoder.decode(value, { stream: true });
     if (!chunkText) continue;
 
-    chunkCount++;
-    if (chunkCount === 1) {
-      firstChunkTime = Date.now() - startTime;
+    sseBuffer += chunkText;
+    let boundaryIndex;
+    while ((boundaryIndex = sseBuffer.indexOf("\n\n")) !== -1) {
+      const sseEvent = sseBuffer.slice(0, boundaryIndex);
+      sseBuffer = sseBuffer.slice(boundaryIndex + 2);
+
+      if (sseEvent.startsWith("data: ")) {
+        const jsonStr = sseEvent.slice(6).trim();
+        if (jsonStr && jsonStr !== "[DONE]") {
+          try {
+            const parsed = JSON.parse(jsonStr);
+            if (parsed && typeof parsed.content === "string") {
+              const content = parsed.content;
+              chunkCount++;
+              if (chunkCount === 1) {
+                firstChunkTime = Date.now() - startTime;
+              }
+
+              const elapsed = Date.now() - startTime;
+              fullRedactedOutput += content;
+
+              // Highlight redactions in terminal
+              const formatted = content.replace(/\[REDACTED\]/g, "\x1b[31m[REDACTED]\x1b[0m");
+              console.log(
+                `  \x1b[36m[+${elapsed.toString().padStart(4, " ")}ms]\x1b[0m Chunk #${chunkCount}: "${formatted}"`
+              );
+            }
+          } catch (e) {
+            // Ignore malformed JSON
+          }
+        }
+      }
     }
-
-    const elapsed = Date.now() - startTime;
-    fullRedactedOutput += chunkText;
-
-    // Highlight redactions in terminal
-    const formatted = chunkText.replace(/\[REDACTED\]/g, "\x1b[31m[REDACTED]\x1b[0m");
-    console.log(
-      `  \x1b[36m[+${elapsed.toString().padStart(4, " ")}ms]\x1b[0m Chunk #${chunkCount}: "${formatted}"`
-    );
   }
 
   const totalDuration = Date.now() - startTime;

@@ -44,10 +44,9 @@ export class MockUpstreamLlmServer {
           return;
         }
 
-        // Stream chunked response with delays
+        // Stream chunked response with SSE
         res.writeHead(200, {
-          "Content-Type": "text/plain; charset=utf-8",
-          "Transfer-Encoding": "chunked",
+          "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",
           Connection: "keep-alive",
         });
@@ -62,7 +61,8 @@ export class MockUpstreamLlmServer {
           }
 
           const chunk = chunks.shift()!;
-          res.write(chunk);
+          const payload = JSON.stringify({ content: chunk });
+          res.write(`data: ${payload}\n\n`);
 
           if (delay > 0) {
             setTimeout(sendNext, delay);

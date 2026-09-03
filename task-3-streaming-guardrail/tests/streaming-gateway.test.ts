@@ -43,6 +43,7 @@ describe("Task 3: Streaming Guardrail Gateway End-to-End Integration", () => {
     expect(reader).toBeDefined();
 
     const decoder = new TextDecoder();
+    let sseBuffer = "";
     while (true) {
       const { done, value } = await reader!.read();
       if (done) break;
@@ -51,9 +52,24 @@ describe("Task 3: Streaming Guardrail Gateway End-to-End Integration", () => {
         ttft = Date.now() - startTime;
       }
 
-      const chunkStr = decoder.decode(value, { stream: true });
-      if (chunkStr.length > 0) {
-        receivedChunks.push(chunkStr);
+      sseBuffer += decoder.decode(value, { stream: true });
+      let boundaryIndex;
+      while ((boundaryIndex = sseBuffer.indexOf("\n\n")) !== -1) {
+        const sseEvent = sseBuffer.slice(0, boundaryIndex);
+        sseBuffer = sseBuffer.slice(boundaryIndex + 2);
+        if (sseEvent.startsWith("data: ")) {
+          const jsonStr = sseEvent.slice(6).trim();
+          if (jsonStr && jsonStr !== "[DONE]") {
+            try {
+              const parsed = JSON.parse(jsonStr);
+              if (parsed && typeof parsed.content === "string") {
+                receivedChunks.push(parsed.content);
+              }
+            } catch (e) {
+              // ignore
+            }
+          }
+        }
       }
     }
 
@@ -99,7 +115,21 @@ describe("Task 3: Streaming Guardrail Gateway End-to-End Integration", () => {
       body: JSON.stringify({ prompt: "Status check" }),
     });
 
-    const fullText = await response.text();
+    const rawText = await response.text();
+    let fullText = "";
+    for (const line of rawText.split("\n\n")) {
+      if (line.startsWith("data: ")) {
+        const jsonStr = line.slice(6).trim();
+        if (jsonStr && jsonStr !== "[DONE]") {
+          try {
+            const parsed = JSON.parse(jsonStr);
+            if (parsed && typeof parsed.content === "string") {
+              fullText += parsed.content;
+            }
+          } catch (e) { }
+        }
+      }
+    }
     expect(fullText).toBe("System cluster overview: Nodes: 12 active, CPU utilization: 24.5%, Storage healthy.");
     expect(fullText).not.toContain("[REDACTED]");
   });
