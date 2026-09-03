@@ -115,7 +115,7 @@ quilrai-assessment/
 ### Installation
 Clone the repository and install all dependencies:
 ```bash
-git clone https://github.com/abhineet/QuilrAI-assessment.git
+git clone https://github.com/menonabhineet/QuilrAI-assessment.git
 cd QuilrAI-assessment
 npm install
 ```
