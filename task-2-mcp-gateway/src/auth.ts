@@ -9,7 +9,17 @@ const TOKEN_REGISTRY: Record<string, AuthenticatedUser> = {
     name: "Enterprise Admin",
     role: "admin",
   },
+  "admin-secret-token": {
+    id: "usr-admin-01",
+    name: "Enterprise Admin",
+    role: "admin",
+  },
   "viewer-token-read-only": {
+    id: "usr-viewer-01",
+    name: "Analytics Viewer",
+    role: "viewer",
+  },
+  "viewer-secret-token": {
     id: "usr-viewer-01",
     name: "Analytics Viewer",
     role: "viewer",

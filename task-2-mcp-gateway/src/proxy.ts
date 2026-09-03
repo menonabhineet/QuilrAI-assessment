@@ -88,6 +88,7 @@ export class McpSecurityGatewayProxy {
           const authHeader = req.headers.authorization;
           user = authenticateRequest(authHeader);
         } catch (authErr) {
+          req.resume(); // drain incoming socket to prevent keep-alive socket hang
           res.writeHead(401, { "Content-Type": "application/json" });
           res.end(
             JSON.stringify({
@@ -116,6 +117,7 @@ export class McpSecurityGatewayProxy {
             payloadTooLarge = true;
             res.writeHead(413, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: "Payload Too Large: Maximum 2MB allowed" }));
+            req.destroy(); // immediately destroy TCP socket
           }
         });
 
@@ -123,7 +125,7 @@ export class McpSecurityGatewayProxy {
           if (payloadTooLarge) return;
 
           // 3. Parse JSON-RPC wire format
-          let jsonRpc: JsonRpcRequest;
+          let jsonRpc: any;
           try {
             jsonRpc = JSON.parse(rawBody);
           } catch {
@@ -141,6 +143,37 @@ export class McpSecurityGatewayProxy {
             return;
           }
 
+          // Validate that the payload is a valid JSON-RPC 2.0 object
+          if (!jsonRpc || typeof jsonRpc !== "object" || Array.isArray(jsonRpc)) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(
+              JSON.stringify({
+                jsonrpc: "2.0",
+                id: null,
+                error: {
+                  code: JSON_RPC_ERRORS.INVALID_REQUEST,
+                  message: "Invalid Request: Expected a JSON-RPC 2.0 request object",
+                },
+              })
+            );
+            return;
+          }
+
+          if (jsonRpc.jsonrpc !== "2.0" || typeof jsonRpc.method !== "string" || !jsonRpc.method) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(
+              JSON.stringify({
+                jsonrpc: "2.0",
+                id: jsonRpc.id ?? null,
+                error: {
+                  code: JSON_RPC_ERRORS.INVALID_REQUEST,
+                  message: "Invalid Request: Payload must include 'jsonrpc': '2.0' and a valid 'method' string",
+                },
+              })
+            );
+            return;
+          }
+
           const { method, params, id } = jsonRpc;
 
           // 4. Policy inspection: tools/list vs tools/call
@@ -151,7 +184,23 @@ export class McpSecurityGatewayProxy {
           }
 
           if (method === "tools/call") {
-            const toolName = params?.name as string | undefined;
+            // Guard against type confusion if params or params.name is not a string
+            const toolName = typeof params?.name === "string" ? params.name : undefined;
+
+            if (params && params.name !== undefined && typeof params.name !== "string") {
+              res.writeHead(400, { "Content-Type": "application/json" });
+              res.end(
+                JSON.stringify({
+                  jsonrpc: "2.0",
+                  id: id ?? null,
+                  error: {
+                    code: JSON_RPC_ERRORS.INVALID_PARAMS,
+                    message: "Invalid params: 'params.name' must be a string",
+                  },
+                })
+              );
+              return;
+            }
 
             // Fine-grained authorization: check if tool begins with admin_
             if (toolName && toolName.startsWith("admin_")) {

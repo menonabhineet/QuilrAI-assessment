@@ -30,9 +30,13 @@ Lightweight HTTP/JSON-RPC reverse proxy gateway sitting between AI agent clients
 
 ## Enterprise Hardening Features
 
-- **Payload Size Limits**: The proxy enforces a strict 2MB limit on incoming JSON-RPC payloads, rejecting overly large requests early in the TCP stream with HTTP 413 (Payload Too Large) to prevent Out-Of-Memory (OOM) Denial of Service attacks.
+- **Safe JSON-RPC Wire Parsing**: Strictly validates incoming JSON objects, rejecting `null`, primitive literals, and arrays with standard `-32600 (Invalid Request)` without unhandled destructuring exceptions.
+- **Type-Safe Method & Tool Validation**: Validates `params.name` type before checking tool prefixes, avoiding runtime type confusion errors.
+- **Payload Size Limits & Immediate Socket Teardown**: Enforces a strict 2MB limit on incoming JSON-RPC payloads, rejecting overly large requests early in the TCP stream with HTTP 413 and calling `req.destroy()` to prevent socket flooding and Out-Of-Memory (OOM) DoS attacks.
+- **Socket Lifecycle & Keep-Alive Protection**: Drains unread client request bodies on HTTP 401 authentication rejections to prevent socket hang-ups on persistent HTTP/1.1 connections.
 - **Dynamic Routing Preservation**: The proxy faithfully preserves the client's original HTTP request path, ensuring compatibility with downstream MCP servers that utilize path-based routing.
 - **Stream-Through Responses**: Downstream responses are piped directly to the client socket, preventing large JSON-RPC responses from accumulating in the gateway's memory.
+- **Dual Token Credential Conventions**: Accepts both canonical and shortened token keys (`admin-token-secret-key` / `admin-secret-token`, `viewer-token-read-only` / `viewer-secret-token`).
 
 ---
 

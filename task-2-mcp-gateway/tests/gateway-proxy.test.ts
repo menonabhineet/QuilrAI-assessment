@@ -120,6 +120,71 @@ describe("Task 2: MCP Security Gateway Proxy (Tool Filtering & Auth)", () => {
       expect(body.error.code).toBe(JSON_RPC_ERRORS.PARSE_ERROR);
       expect(downstreamServer.stats.totalRequests).toBe(0);
     });
+
+    it("rejects JSON null literal without crashing process via -32600 (HTTP 400)", async () => {
+      const { status, body } = await postJson("null", VIEWER_TOKEN);
+
+      expect(status).toBe(400);
+      expect(body.error).toBeDefined();
+      expect(body.error.code).toBe(JSON_RPC_ERRORS.INVALID_REQUEST);
+      expect(downstreamServer.stats.totalRequests).toBe(0);
+    });
+
+    it("rejects JSON primitive values without crashing process via -32600 (HTTP 400)", async () => {
+      const { status, body } = await postJson("12345", VIEWER_TOKEN);
+
+      expect(status).toBe(400);
+      expect(body.error).toBeDefined();
+      expect(body.error.code).toBe(JSON_RPC_ERRORS.INVALID_REQUEST);
+      expect(downstreamServer.stats.totalRequests).toBe(0);
+    });
+
+    it("rejects JSON array batch payloads cleanly via -32600 (HTTP 400)", async () => {
+      const { status, body } = await postJson("[]", VIEWER_TOKEN);
+
+      expect(status).toBe(400);
+      expect(body.error).toBeDefined();
+      expect(body.error.code).toBe(JSON_RPC_ERRORS.INVALID_REQUEST);
+      expect(downstreamServer.stats.totalRequests).toBe(0);
+    });
+
+    it("rejects tools/call with non-string tool name via -32602 (HTTP 400)", async () => {
+      const { status, body } = await postJson(
+        {
+          jsonrpc: "2.0",
+          id: "type-confusion-test",
+          method: "tools/call",
+          params: { name: 12345 },
+        },
+        VIEWER_TOKEN
+      );
+
+      expect(status).toBe(400);
+      expect(body.error).toBeDefined();
+      expect(body.error.code).toBe(JSON_RPC_ERRORS.INVALID_PARAMS);
+      expect(downstreamServer.stats.totalRequests).toBe(0);
+    });
+
+    it("supports token aliases (admin-secret-token and viewer-secret-token)", async () => {
+      const { status: statusViewer, body: bodyViewer } = await postJson(
+        { jsonrpc: "2.0", id: 10, method: "tools/list", params: {} },
+        "viewer-secret-token"
+      );
+      expect(statusViewer).toBe(200);
+      expect(bodyViewer.result).toBeDefined();
+
+      const { status: statusAdmin, body: bodyAdmin } = await postJson(
+        {
+          jsonrpc: "2.0",
+          id: 11,
+          method: "tools/call",
+          params: { name: "admin_reset_key", arguments: { key_name: "test" } },
+        },
+        "admin-secret-token"
+      );
+      expect(statusAdmin).toBe(200);
+      expect(bodyAdmin.result).toBeDefined();
+    });
   });
 
   describe("tools/list Forwarding", () => {

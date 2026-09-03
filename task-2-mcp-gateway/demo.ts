@@ -83,6 +83,9 @@ async function runDemo() {
     method: "tools/list",
   });
 
+  // 6. Malformed JSON-RPC wire payload (JSON null literal)
+  await post("Malformed wire structure 'null' (Handled cleanly via -32600 Invalid Request)", VIEWER_TOKEN, null);
+
   console.log("\n=======================================================");
   console.log("  Demo Summary & Verification Metrics:");
   console.log(`  - Gateway Total Forwarded Requests: ${proxy.forwardedCount}`);
