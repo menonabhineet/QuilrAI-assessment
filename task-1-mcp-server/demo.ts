@@ -83,10 +83,10 @@ async function runDemo() {
   });
   console.log(`\x1b[32m<<< SERVER RESPONSE:\x1b[0m\n`, JSON.stringify(getCustRes, null, 2));
 
-  // 4. Call admin_trigger_refund with valid parameters
-  console.log("\n--- STEP 4: Valid Tool Call: admin_trigger_refund ($75.50) ---");
+  // 4. Call canonical trigger_refund with valid parameters
+  console.log("\n--- STEP 4: Valid Tool Call: trigger_refund ($75.50) ---");
   const refundRes = await send("tools/call", {
-    name: "admin_trigger_refund",
+    name: "trigger_refund",
     arguments: {
       customer_id: "CUST-10002",
       amount: 75.5,
@@ -103,10 +103,10 @@ async function runDemo() {
   });
   console.log(`\x1b[31m<<< SERVER ERROR RESPONSE (-32602 Invalid params):\x1b[0m\n`, JSON.stringify(badCustRes, null, 2));
 
-  // 6. Call admin_trigger_refund with negative amount
-  console.log("\n--- STEP 6: Invalid Input Rejection: admin_trigger_refund (negative amount) ---");
+  // 6. Call trigger_refund with negative amount
+  console.log("\n--- STEP 6: Invalid Input Rejection: trigger_refund (negative amount) ---");
   const badRefundRes = await send("tools/call", {
-    name: "admin_trigger_refund",
+    name: "trigger_refund",
     arguments: {
       customer_id: "CUST-10002",
       amount: -25.0,

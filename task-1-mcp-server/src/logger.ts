@@ -55,16 +55,46 @@ export function enforceStdioIsolation(): void {
     process.stderr.write(`[WARN] ${args.map(String).join(" ")}\n`);
   };
 
+  let stdoutLineBuffer = "";
   const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+
   (process.stdout as any).write = (chunk: Uint8Array | string, encoding?: any, cb?: any) => {
-    const str = typeof chunk === "string" ? chunk : chunk.toString();
-    // Allow MCP SDK JSON-RPC frames to pass through to stdout
-    if (str.includes('"jsonrpc"')) {
-      return originalStdoutWrite(chunk, encoding, cb);
+    let callback = cb;
+    let enc = encoding;
+    if (typeof encoding === "function") {
+      callback = encoding;
+      enc = undefined;
     }
-    // Redirect all other stdout writes to stderr
-    process.stderr.write(`[STDOUT-REDIRECTED] ${str}`);
-    if (cb) cb();
+
+    const str = typeof chunk === "string" ? chunk : Buffer.from(chunk).toString(enc || "utf8");
+    stdoutLineBuffer += str;
+
+    const lines = stdoutLineBuffer.split("\n");
+    // Retain incomplete fragment for subsequent chunk
+    stdoutLineBuffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      let isJsonRpc = false;
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && parsed.jsonrpc === "2.0") {
+          isJsonRpc = true;
+        }
+      } catch {
+        isJsonRpc = false;
+      }
+
+      if (isJsonRpc) {
+        originalStdoutWrite(line + "\n");
+      } else {
+        process.stderr.write(`[STDOUT-REDIRECTED] ${line}\n`);
+      }
+    }
+
+    if (callback) callback();
     return true;
   };
 }

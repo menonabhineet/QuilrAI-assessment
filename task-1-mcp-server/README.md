@@ -7,11 +7,11 @@ Production-grade Model Context Protocol (MCP) server implementation using the of
 ## Architectural Highlights
 
 ### 1. Pure STDIO Isolation
-- **The Problem**: The MCP specification uses `stdio` as a binary/text wire format for JSON-RPC 2.0 frames. If internal libraries or debug logs print arbitrary text to `stdout`, the client JSON-RPC parser breaks.
+- **The Problem**: The MCP specification uses `stdio` as a binary/text wire format for JSON-RPC 2.0 frames. If internal libraries or debug logs print arbitrary text to `stdout`, the client JSON-RPC parser breaks. Furthermore, naive substring filters risk corrupting chunked writes or leaking debug logs that mention protocol strings.
 - **The Solution**: 
   - `stdout` is 100% reserved for valid JSON-RPC frames managed by `StdioServerTransport`.
   - An internal stderr logger (`src/logger.ts`) routes all diagnostic, debug, and informational messages exclusively to `process.stderr`.
-  - An active monkey patch (`enforceStdioIsolation`) intercepts `console.log`, `console.info`, and `console.debug`, safely redirecting any accidental output to `stderr`.
+  - An active line-buffered monkey patch (`enforceStdioIsolation`) intercepts `console.log`, `console.info`, `console.debug`, and `process.stdout.write`. It parses complete lines to verify `jsonrpc === "2.0"` before allowing stdout pass-through, safely redirecting any accidental output to `stderr` without chunk fragmentation risks.
 
 ### 2. Strict Input Schema Validation
 - Formulated using **Zod** (`src/types.ts`).
@@ -32,12 +32,14 @@ Production-grade Model Context Protocol (MCP) server implementation using the of
   - `customer_id` (string, required): Must strictly match regex `^CUST-[0-9]{5}$` (e.g., `CUST-10001`).
 - **Response**: Full customer profile JSON including name, email, subscription tier, account balance, status, and creation date.
 
-### Tool 2: `admin_trigger_refund`
+### Tool 2: `trigger_refund` (and `admin_trigger_refund` alias)
 - **Description**: Issue a monetary refund to an active customer account.
+- **Canonical Tool Name**: `trigger_refund` (per assessment specification).
+- **Administrative Alias**: `admin_trigger_refund` (for RBAC gateway routing compatibility).
 - **Input Parameters**:
   - `customer_id` (string, required): Must match `^CUST-[0-9]{5}$`.
-  - `amount` (number, required): Positive float strictly greater than 0.
-  - `reason` (string, required): Auditable justification with a minimum length of 10 characters.
+  - `amount` (number, required): Positive finite float strictly greater than 0 (rejects `Infinity` and `NaN`).
+  - `reason` (string, required): Auditable justification with a minimum length of 10 characters (excluding leading and trailing whitespace).
 - **Response**: Transaction receipt with unique `refund_id` (e.g. `REF-1001`), timestamp, amount, reason, and updated account balance.
 
 ---

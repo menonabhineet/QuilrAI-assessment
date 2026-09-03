@@ -21,12 +21,15 @@ export const GetCustomerRecordSchema = z.object({
 
 export type GetCustomerRecordInput = z.infer<typeof GetCustomerRecordSchema>;
 
-export const AdminTriggerRefundSchema = z.object({
+export const TriggerRefundSchema = z.object({
   customer_id: CustomerIdSchema,
   amount: z
     .number({
       required_error: "amount is required",
       invalid_type_error: "amount must be a number",
+    })
+    .finite({
+      message: "amount must be a finite number",
     })
     .positive({
       message: "amount must be a positive float greater than 0",
@@ -36,12 +39,17 @@ export const AdminTriggerRefundSchema = z.object({
       required_error: "reason is required",
       invalid_type_error: "reason must be a string",
     })
+    .trim()
     .min(10, {
-      message: "reason must have a minimum length of 10 characters",
+      message: "reason must have a minimum length of 10 characters (non-whitespace)",
     }),
 });
 
-export type AdminTriggerRefundInput = z.infer<typeof AdminTriggerRefundSchema>;
+export type TriggerRefundInput = z.infer<typeof TriggerRefundSchema>;
+
+// Backwards-compatible alias for RBAC and legacy imports
+export const AdminTriggerRefundSchema = TriggerRefundSchema;
+export type AdminTriggerRefundInput = TriggerRefundInput;
 
 export interface CustomerRecord {
   customer_id: string;

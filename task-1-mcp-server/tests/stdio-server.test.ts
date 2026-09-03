@@ -146,7 +146,33 @@ describe("Task 1: MCP Server STDIO Isolation and Transport Integration", () => {
 
     const toolNames = result.tools.map((t) => t.name);
     expect(toolNames).toContain("get_customer_record");
+    expect(toolNames).toContain("trigger_refund");
     expect(toolNames).toContain("admin_trigger_refund");
+  });
+
+  it("successfully triggers refund using canonical trigger_refund tool name", async () => {
+    const response = await sendRequest({
+      jsonrpc: "2.0",
+      id: 29,
+      method: "tools/call",
+      params: {
+        name: "trigger_refund",
+        arguments: {
+          customer_id: "CUST-10001",
+          amount: 25.0,
+          reason: "Canonical trigger_refund call per assessment specification",
+        },
+      },
+    });
+
+    expect(response.error).toBeUndefined();
+    const result = response.result as { content: Array<{ type: string; text: string }> };
+    expect(result.content).toBeDefined();
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.status).toBe("success");
+    expect(parsed.refund.customer_id).toBe("CUST-10001");
+    expect(parsed.refund.amount).toBe(25.0);
   });
 
   it("successfully retrieves customer record with valid customer_id", async () => {
@@ -284,6 +310,48 @@ describe("Task 1: MCP Server STDIO Isolation and Transport Integration", () => {
     // JSON-RPC code -32603 (Internal error)
     expect(response.error?.code).toBe(-32603);
     expect(response.error?.message).toContain("suspended");
+  });
+
+  it("rejects trigger_refund with infinite amount via -32602", async () => {
+    const response = await sendRequest({
+      jsonrpc: "2.0",
+      id: 34,
+      method: "tools/call",
+      params: {
+        name: "trigger_refund",
+        arguments: {
+          customer_id: "CUST-10001",
+          amount: Infinity,
+          reason: "Valid detailed reason for refund",
+        },
+      },
+    });
+
+    expect(response.result).toBeUndefined();
+    expect(response.error).toBeDefined();
+    expect(response.error?.code).toBe(-32602);
+    expect(response.error?.message).toMatch(/amount must be a (finite )?number/);
+  });
+
+  it("rejects trigger_refund with whitespace-only reason via -32602", async () => {
+    const response = await sendRequest({
+      jsonrpc: "2.0",
+      id: 35,
+      method: "tools/call",
+      params: {
+        name: "trigger_refund",
+        arguments: {
+          customer_id: "CUST-10001",
+          amount: 50.0,
+          reason: "          ", // 10 spaces
+        },
+      },
+    });
+
+    expect(response.result).toBeUndefined();
+    expect(response.error).toBeDefined();
+    expect(response.error?.code).toBe(-32602);
+    expect(response.error?.message).toContain("minimum length of 10");
   });
 
   it("strictly enforces STDIO isolation: 100% of stdout is valid JSON-RPC", () => {

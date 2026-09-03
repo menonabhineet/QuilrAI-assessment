@@ -7,7 +7,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import {
   GetCustomerRecordSchema,
-  AdminTriggerRefundSchema,
+  TriggerRefundSchema,
   formatZodError,
 } from "./types.js";
 import { db } from "./db.js";
@@ -52,8 +52,33 @@ export function createCustomerMcpServer(): Server {
           },
         },
         {
-          name: "admin_trigger_refund",
+          name: "trigger_refund",
           description: "Issue a monetary refund to an active customer account with audited reason.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              customer_id: {
+                type: "string",
+                description: "Customer identifier strictly formatted as CUST-XXXXX (e.g. CUST-10001)",
+                pattern: "^CUST-[0-9]{5}$",
+              },
+              amount: {
+                type: "number",
+                description: "Monetary amount to refund (positive float strictly greater than 0)",
+                minimum: 0.01,
+              },
+              reason: {
+                type: "string",
+                description: "Auditable justification for refund (minimum 10 characters)",
+                minLength: 10,
+              },
+            },
+            required: ["customer_id", "amount", "reason"],
+          },
+        },
+        {
+          name: "admin_trigger_refund",
+          description: "Administrative alias: Issue a monetary refund to an active customer account with audited reason.",
           inputSchema: {
             type: "object",
             properties: {
@@ -137,18 +162,18 @@ export function createCustomerMcpServer(): Server {
       }
     }
 
-    if (name === "admin_trigger_refund") {
+    if (name === "trigger_refund" || name === "admin_trigger_refund") {
       // 1. Strict input validation via Zod
-      const parseResult = AdminTriggerRefundSchema.safeParse(args);
+      const parseResult = TriggerRefundSchema.safeParse(args);
       if (!parseResult.success) {
         const errorDetails = formatZodError(parseResult.error);
-        logger.warn("Input validation rejected for admin_trigger_refund", {
+        logger.warn(`Input validation rejected for ${name}`, {
           error: errorDetails,
         });
         // JSON-RPC -32602: Invalid params
         throw new McpError(
           ErrorCode.InvalidParams,
-          `Invalid parameters for admin_trigger_refund: ${errorDetails}`
+          `Invalid parameters for ${name}: ${errorDetails}`
         );
       }
 
