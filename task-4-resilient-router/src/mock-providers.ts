@@ -1,7 +1,7 @@
 import http from "http";
 import { CompletionRequest } from "./types.js";
 
-export type ProviderMode = "healthy" | "rate_limit_429" | "timeout" | "internal_error";
+export type ProviderMode = "healthy" | "rate_limit_429" | "timeout" | "internal_error" | "client_error_400";
 
 export class MockModelProvider {
   private server: http.Server | null = null;
@@ -46,6 +46,16 @@ export class MockModelProvider {
             parsed = JSON.parse(rawBody);
           } catch {
             // ignore
+          }
+
+          if (this.mode === "client_error_400") {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(
+              JSON.stringify({
+                error: "Invalid parameter rejected by provider",
+              })
+            );
+            return;
           }
 
           if (this.mode === "rate_limit_429") {

@@ -26,11 +26,12 @@ export class ResilientModelRouter {
     const timeoutId = setTimeout(() => controller.abort(), timeout);
     const start = Date.now();
 
+    const abortHandler = () => controller.abort();
     if (clientSignal) {
       if (clientSignal.aborted) {
         controller.abort();
       } else {
-        clientSignal.addEventListener("abort", () => controller.abort());
+        clientSignal.addEventListener("abort", abortHandler);
       }
     }
 
@@ -70,6 +71,9 @@ export class ResilientModelRouter {
       };
     } finally {
       clearTimeout(timeoutId);
+      if (clientSignal) {
+        clientSignal.removeEventListener("abort", abortHandler);
+      }
     }
   }
 
@@ -98,6 +102,22 @@ export class ResilientModelRouter {
         fallback_occurred: false,
         latency_ms: primaryRes.durationMs,
       };
+    }
+
+    // Non-retryable client errors (HTTP 400, 401, 403, 404) must not trigger failover
+    if (primaryRes.status >= 400 && primaryRes.status < 500 && primaryRes.status !== 429) {
+      const errMsg =
+        (typeof primaryRes.data?.error === "string" ? primaryRes.data.error : undefined) ||
+        `Upstream client request rejected with HTTP ${primaryRes.status}`;
+      const clientError = new Error(errMsg);
+      (clientError as any).status = primaryRes.status;
+      (clientError as any).gatewayPayload = {
+        error: {
+          code: "UPSTREAM_CLIENT_ERROR",
+          message: errMsg,
+        },
+      };
+      throw clientError;
     }
 
     // Determine fallback reason

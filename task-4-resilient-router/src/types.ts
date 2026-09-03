@@ -41,6 +41,7 @@ export interface RateLimitStatus {
 export interface RateLimiterOptions {
   limitTokensPerWindow?: number; // default: 50,000 tokens
   windowMs?: number;            // default: 60,000ms (1 minute)
+  maxTenants?: number;          // default: 10,000 tenants
 }
 
 export interface RouterOptions {

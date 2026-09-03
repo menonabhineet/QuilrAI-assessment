@@ -97,6 +97,56 @@ describe("Task 4: Rate-Limiting & Model Fallback Router", () => {
       expect(rateLimiter.estimateTokens(undefined, -10)).toBe(101);
       expect(rateLimiter.estimateTokens("12345678", 50)).toBe(52); // 2 prompt tokens + 50 max_tokens
     });
+
+    it("reconciles estimated token reservations against actual usage", () => {
+      // Consume 500 estimated tokens
+      rateLimiter.checkAndConsume("tenant-recon", 500);
+      const statusBefore = rateLimiter.checkAndConsume("tenant-recon", 0);
+      expect(statusBefore.currentUsage).toBe(500);
+
+      // Model only used 100 tokens: refund 400 tokens
+      rateLimiter.reconcileTokens("tenant-recon", 500, 100);
+      const statusAfter = rateLimiter.checkAndConsume("tenant-recon", 0);
+      expect(statusAfter.currentUsage).toBe(100);
+    });
+
+    it("evicts inactive tenants after 2 sliding windows to prevent memory leaks", () => {
+      const now = Date.now();
+      rateLimiter.checkAndConsume("tenant-active", 100, now);
+      rateLimiter.checkAndConsume("tenant-stale", 100, now);
+
+      expect(rateLimiter.getTenantCount()).toBe(2);
+
+      // Active tenant has ongoing activity at 1.5 windows (1500ms)
+      rateLimiter.checkAndConsume("tenant-active", 50, now + 1500);
+
+      // At 2.5 windows (2500ms), tenant-stale has had no activity for 2.5 windows (exceeding 2 windows)
+      const later = now + 2500;
+      const evicted = rateLimiter.evictExpiredTenants(later);
+      expect(evicted).toBe(1);
+      expect(rateLimiter.getTenantCount()).toBe(1);
+
+      // Verify tenant-active is still present and can consume
+      const activeStatus = rateLimiter.checkAndConsume("tenant-active", 10, later);
+      expect(activeStatus.allowed).toBe(true);
+    });
+
+    it("enforces maxTenants capacity cap to prevent unbounded memory growth", () => {
+      const smallLimiter = new TokenAwareRateLimiter({
+        limitTokensPerWindow: 1000,
+        windowMs: 60000,
+        maxTenants: 3,
+      });
+
+      smallLimiter.checkAndConsume("tenant-1", 10);
+      smallLimiter.checkAndConsume("tenant-2", 10);
+      smallLimiter.checkAndConsume("tenant-3", 10);
+      expect(smallLimiter.getTenantCount()).toBe(3);
+
+      // Adding 4th tenant evicts the oldest entry
+      smallLimiter.checkAndConsume("tenant-4", 10);
+      expect(smallLimiter.getTenantCount()).toBe(3);
+    });
   });
 
   describe("HTTP Gateway & Resilient Router Integration", () => {
@@ -305,6 +355,69 @@ describe("Task 4: Rate-Limiting & Model Fallback Router", () => {
       expect(errorString).not.toContain("ProviderCore.ts");
       expect(errorString).not.toContain("connection pool reset");
       expect(errorString).not.toContain("127.0.0.1");
+    });
+
+    it("rejects JSON null literal without crashing process (HTTP 400)", async () => {
+      const res = await fetch(gatewayUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "null",
+      });
+
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error).toBeDefined();
+      expect(body.error.code).toBe("INVALID_PAYLOAD");
+    });
+
+    it("rejects missing or empty prompt (HTTP 400)", async () => {
+      const res = await fetch(gatewayUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: "" }),
+      });
+
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error).toBeDefined();
+      expect(body.error.code).toBe("INVALID_PROMPT");
+    });
+
+    it("does NOT trigger fallback on primary client error HTTP 400", async () => {
+      primaryProvider.setMode("client_error_400");
+      secondaryProvider.setMode("healthy");
+
+      const { status, body } = await sendCompletion({
+        prompt: "Trigger client error on primary",
+      });
+
+      expect(status).toBe(400);
+      expect(body.error).toBeDefined();
+      expect(body.error.code).toBe("UPSTREAM_CLIENT_ERROR");
+
+      // Secondary provider must NOT have been called for a client 400
+      expect(primaryProvider.requestCount).toBe(1);
+      expect(secondaryProvider.requestCount).toBe(0);
+    });
+
+    it("reconciles token usage in rate limiter after completion returns", async () => {
+      primaryProvider.setMode("healthy");
+      const tenant = "tenant-reconcile-test";
+
+      // Send completion with prompt and max_tokens
+      const { status, body } = await sendCompletion(
+        { prompt: "Testing reconciliation with small prompt", max_tokens: 500 },
+        tenant
+      );
+
+      expect(status).toBe(200);
+      expect(body.tokens_used).toBeDefined();
+
+      // Check remaining quota on rate limiter
+      const check = gatewayServer.rateLimiter.checkAndConsume(tenant, 0);
+      // Quota was adjusted to actual tokens (prompt tokens ~11 + completion tokens 42 = 53 tokens),
+      // rather than estimated 500+ tokens
+      expect(check.currentUsage).toBeLessThan(100);
     });
   });
 });

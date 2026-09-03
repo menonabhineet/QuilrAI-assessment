@@ -41,14 +41,35 @@ export class ResilientRouterGatewayServer {
           tenantId = authHeader.replace("Bearer ", "").trim();
         }
 
-        // 2. Ingest request body
+        // 2. Ingest request body with 2MB limit
         let bodyStr = "";
+        let bodyLength = 0;
+        const MAX_PAYLOAD_SIZE = 2 * 1024 * 1024; // 2MB
+        let payloadTooLarge = false;
+
         req.on("data", (chunk) => {
+          if (payloadTooLarge) return;
           bodyStr += chunk.toString("utf8");
+          bodyLength += chunk.length;
+          if (bodyLength > MAX_PAYLOAD_SIZE) {
+            payloadTooLarge = true;
+            res.writeHead(413, { "Content-Type": "application/json" });
+            res.end(
+              JSON.stringify({
+                error: {
+                  code: "PAYLOAD_TOO_LARGE",
+                  message: "Payload exceeds 2MB maximum limit",
+                },
+              })
+            );
+            req.destroy();
+          }
         });
 
         req.on("end", async () => {
-          let requestPayload: CompletionRequest;
+          if (payloadTooLarge) return;
+
+          let requestPayload: any;
           try {
             requestPayload = JSON.parse(bodyStr);
           } catch {
@@ -64,9 +85,36 @@ export class ResilientRouterGatewayServer {
             return;
           }
 
+          // Validate non-null object and valid prompt
+          if (!requestPayload || typeof requestPayload !== "object" || Array.isArray(requestPayload)) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(
+              JSON.stringify({
+                error: {
+                  code: "INVALID_PAYLOAD",
+                  message: "Request payload must be a non-null JSON object",
+                },
+              })
+            );
+            return;
+          }
+
+          if (typeof requestPayload.prompt !== "string" || requestPayload.prompt.length === 0) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(
+              JSON.stringify({
+                error: {
+                  code: "INVALID_PROMPT",
+                  message: "Field 'prompt' must be a non-empty string",
+                },
+              })
+            );
+            return;
+          }
+
           // 3. Token-Aware Rate Limiting
           const estimatedTokens = this.rateLimiter.estimateTokens(
-            requestPayload.prompt || "",
+            requestPayload.prompt,
             requestPayload.max_tokens
           );
 
@@ -107,6 +155,15 @@ export class ResilientRouterGatewayServer {
           try {
             const completion = await this.router.routeCompletion(requestPayload, abortController.signal);
 
+            // Reconcile consumed tokens against actual tokens used
+            if (completion.tokens_used?.total_tokens) {
+              this.rateLimiter.reconcileTokens(
+                tenantId,
+                estimatedTokens,
+                completion.tokens_used.total_tokens
+              );
+            }
+
             res.writeHead(200, {
               "Content-Type": "application/json",
               "X-Model-Provider": completion.provider,
@@ -117,6 +174,9 @@ export class ResilientRouterGatewayServer {
 
             res.end(JSON.stringify(completion));
           } catch (err: any) {
+            // Refund unconsumed tokens when request fails
+            this.rateLimiter.reconcileTokens(tenantId, estimatedTokens, 0);
+
             const statusCode = err.status || 502;
             const payload = err.gatewayPayload || {
               error: {

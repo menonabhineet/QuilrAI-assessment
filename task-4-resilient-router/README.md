@@ -36,7 +36,8 @@ Resilient model router and token-aware sliding window rate limiter for LLM gatew
 - **Limit**: Configurable (default 50,000 tokens per 60,000ms window per tenant).
 - **Tenant Identification**: Extracted from `Authorization: Bearer <tenant_id>` or `X-Tenant-ID`.
 - **Estimation Heuristic**: `ceil(prompt.length / 4) + max_tokens`.
-- **Eviction Strategy**: Lazy sliding window eviction of records older than 60 seconds.
+- **Token Reconciliation**: Adjusts quota reservations to actual token usage reported upon completion, refunding unused estimated tokens. Refunds unconsumed reservations if upstream calls fail.
+- **Active TTL Eviction & Memory Bounding**: Sweeps and removes inactive tenants whose activity has ceased for more than 2 sliding windows (`2 * windowMs`). Caps maximum concurrent tenants (default 10,000) using LRU eviction to guarantee bounded heap consumption.
 - **HTTP 429 Headers**:
   - `Retry-After`: Seconds until the oldest token record in the active window expires.
   - `X-RateLimit-Limit`: Maximum tokens per minute (50000).
@@ -44,9 +45,11 @@ Resilient model router and token-aware sliding window rate limiter for LLM gatew
   - `X-RateLimit-Reset`: Reset countdown in seconds.
 
 ### 2. Resilient Fallback Mechanics
-- **3000ms Timeout Deadline**: Uses `AbortController` coupled with a hardware timer to abort unresponsive primary requests at exactly 3000ms.
+- **3000ms Timeout Deadline**: Uses `AbortController` coupled with a hardware timer to abort unresponsive primary requests at exactly 3000ms, cleaning up abort listeners in all execution paths.
 - **429 Rate Limit Failover**: Intercepts primary upstream quota saturation and immediately redirects the completion request to the secondary provider.
+- **Selective Failover Policy**: Only transient failures (HTTP 429, HTTP 504 timeouts, HTTP 5xx server errors, network disconnects) trigger secondary failover. Non-retryable client errors (HTTP 400, 401, 403, 404) are returned directly without triggering fallback.
 - **Metadata Transparency**: Responses return `X-Model-Provider: secondary` and `fallback_occurred: true` alongside the exact failure reason (`primary_timeout_3000ms` or `primary_rate_limited_429`).
+- **Payload Safety & Limits**: Enforces a strict 2MB maximum payload limit with immediate TCP socket teardown on overflow, alongside strict JSON object verification.
 
 ### 3. Error Sanitization Policy
 If all upstream model providers fail:

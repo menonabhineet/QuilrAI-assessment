@@ -99,6 +99,13 @@ async function runDemo() {
     prompt: "Generate disaster recovery checklist.",
   });
 
+  // Scenario 6: Primary rejects with HTTP 400 (Client error: No fallback triggered)
+  primary.setMode("client_error_400");
+  secondary.setMode("healthy");
+  await post("Scenario 6: Client Error Rejection (HTTP 400 from Primary: No Fallback)", {
+    prompt: "Trigger client error without triggering fallback.",
+  });
+
   console.log("=======================================================");
   console.log("  Demo Complete: Verified Resilient Routing & Rate Limiting!");
   console.log("=======================================================\n");

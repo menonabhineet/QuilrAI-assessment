@@ -13,11 +13,43 @@ interface TenantUsage {
 export class TokenAwareRateLimiter {
   private readonly limit: number;
   private readonly windowMs: number;
+  private readonly maxTenants: number;
+  private lastEvictionTime: number = 0;
   private tenantUsage: Map<string, TenantUsage> = new Map();
 
   constructor(options: RateLimiterOptions = {}) {
     this.limit = options.limitTokensPerWindow ?? 50000;
     this.windowMs = options.windowMs ?? 60000;
+    this.maxTenants = options.maxTenants ?? 10000;
+  }
+
+  /**
+   * Sweeps and evicts tenant records where activity has ceased for more than 2 sliding windows.
+   * Returns count of evicted tenants.
+   */
+  public evictExpiredTenants(now = Date.now()): number {
+    let evicted = 0;
+    for (const [tenantId, record] of this.tenantUsage.entries()) {
+      if (now - record.currWindowStartTime >= 2 * this.windowMs) {
+        this.tenantUsage.delete(tenantId);
+        evicted++;
+      }
+    }
+    this.lastEvictionTime = now;
+    return evicted;
+  }
+
+  /**
+   * Reconciles estimated token quota reservation against actual tokens consumed.
+   * Refunds unused tokens back to tenant's current window.
+   */
+  public reconcileTokens(tenantId: string, estimatedTokens: number, actualTokens: number): void {
+    const record = this.tenantUsage.get(tenantId);
+    if (!record) return;
+    const unused = estimatedTokens - actualTokens;
+    if (unused > 0) {
+      record.currWindowCount = Math.max(0, record.currWindowCount - unused);
+    }
   }
 
   /**
@@ -37,8 +69,18 @@ export class TokenAwareRateLimiter {
    * If allowed, commits the tokens to the sliding window log.
    */
   public checkAndConsume(tenantId: string, requestedTokens: number, now = Date.now()): RateLimitStatus {
+    // Periodic active eviction check
+    if (now - this.lastEvictionTime >= this.windowMs) {
+      this.evictExpiredTenants(now);
+    }
+
     let record = this.tenantUsage.get(tenantId);
     if (!record) {
+      // Enforce bounded memory: evict oldest entry if at capacity limit
+      if (this.tenantUsage.size >= this.maxTenants) {
+        const oldestKey = this.tenantUsage.keys().next().value;
+        if (oldestKey) this.tenantUsage.delete(oldestKey);
+      }
       record = { prevWindowCount: 0, currWindowCount: 0, currWindowStartTime: now };
     }
 
@@ -115,5 +157,13 @@ export class TokenAwareRateLimiter {
 
   public getWindowMs(): number {
     return this.windowMs;
+  }
+
+  public getTenantCount(): number {
+    return this.tenantUsage.size;
+  }
+
+  public getMaxTenants(): number {
+    return this.maxTenants;
   }
 }
