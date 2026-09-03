@@ -25,6 +25,14 @@ describe("Task 3: PiiRedactionEngine Unit Tests", () => {
       expect(engine.metrics.ssnsRedacted).toBe(1);
     });
 
+    it("redacts SSNs directly adjacent to text without intervening spaces (e.g. SSN999-88-7777)", () => {
+      const input = "Send refund confirmation to client via SSN999-88-7777 immediately.";
+      const output = engine.processChunk(input) + engine.flush();
+
+      expect(output).toBe("Send refund confirmation to client via SSN[REDACTED] immediately.");
+      expect(engine.metrics.ssnsRedacted).toBe(1);
+    });
+
     it("redacts credit card numbers with hyphens, spaces, and raw digits", () => {
       const inputs = [
         "Card with hyphens: 4532-1234-5678-9012 in vault.",
