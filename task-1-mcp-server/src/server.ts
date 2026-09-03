@@ -7,7 +7,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import {
   GetCustomerRecordSchema,
-  TriggerRefundSchema,
+  AdminTriggerRefundSchema,
   formatZodError,
 } from "./types.js";
 import { db } from "./db.js";
@@ -52,7 +52,7 @@ export function createCustomerMcpServer(): Server {
           },
         },
         {
-          name: "trigger_refund",
+          name: "admin_trigger_refund",
           description: "Issue a monetary refund to an active customer account with audited reason.",
           inputSchema: {
             type: "object",
@@ -137,18 +137,18 @@ export function createCustomerMcpServer(): Server {
       }
     }
 
-    if (name === "trigger_refund") {
+    if (name === "admin_trigger_refund") {
       // 1. Strict input validation via Zod
-      const parseResult = TriggerRefundSchema.safeParse(args);
+      const parseResult = AdminTriggerRefundSchema.safeParse(args);
       if (!parseResult.success) {
         const errorDetails = formatZodError(parseResult.error);
-        logger.warn("Input validation rejected for trigger_refund", {
+        logger.warn("Input validation rejected for admin_trigger_refund", {
           error: errorDetails,
         });
         // JSON-RPC -32602: Invalid params
         throw new McpError(
           ErrorCode.InvalidParams,
-          `Invalid parameters for trigger_refund: ${errorDetails}`
+          `Invalid parameters for admin_trigger_refund: ${errorDetails}`
         );
       }
 

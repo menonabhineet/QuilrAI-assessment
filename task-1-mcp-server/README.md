@@ -32,7 +32,7 @@ Production-grade Model Context Protocol (MCP) server implementation using the of
   - `customer_id` (string, required): Must strictly match regex `^CUST-[0-9]{5}$` (e.g., `CUST-10001`).
 - **Response**: Full customer profile JSON including name, email, subscription tier, account balance, status, and creation date.
 
-### Tool 2: `trigger_refund`
+### Tool 2: `admin_trigger_refund`
 - **Description**: Issue a monetary refund to an active customer account.
 - **Input Parameters**:
   - `customer_id` (string, required): Must match `^CUST-[0-9]{5}$`.

@@ -21,7 +21,7 @@ export const GetCustomerRecordSchema = z.object({
 
 export type GetCustomerRecordInput = z.infer<typeof GetCustomerRecordSchema>;
 
-export const TriggerRefundSchema = z.object({
+export const AdminTriggerRefundSchema = z.object({
   customer_id: CustomerIdSchema,
   amount: z
     .number({
@@ -41,7 +41,7 @@ export const TriggerRefundSchema = z.object({
     }),
 });
 
-export type TriggerRefundInput = z.infer<typeof TriggerRefundSchema>;
+export type AdminTriggerRefundInput = z.infer<typeof AdminTriggerRefundSchema>;
 
 export interface CustomerRecord {
   customer_id: string;

@@ -54,4 +54,17 @@ export function enforceStdioIsolation(): void {
   console.warn = (...args: unknown[]) => {
     process.stderr.write(`[WARN] ${args.map(String).join(" ")}\n`);
   };
+
+  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+  (process.stdout as any).write = (chunk: Uint8Array | string, encoding?: any, cb?: any) => {
+    const str = typeof chunk === "string" ? chunk : chunk.toString();
+    // Allow MCP SDK JSON-RPC frames to pass through to stdout
+    if (str.includes('"jsonrpc"')) {
+      return originalStdoutWrite(chunk, encoding, cb);
+    }
+    // Redirect all other stdout writes to stderr
+    process.stderr.write(`[STDOUT-REDIRECTED] ${str}`);
+    if (cb) cb();
+    return true;
+  };
 }

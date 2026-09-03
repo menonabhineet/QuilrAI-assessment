@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   CustomerIdSchema,
   GetCustomerRecordSchema,
-  TriggerRefundSchema,
+  AdminTriggerRefundSchema,
   formatZodError,
 } from "../src/types.js";
 
@@ -62,14 +62,14 @@ describe("Task 1: Zod Schema Input Validation", () => {
     });
   });
 
-  describe("TriggerRefundSchema", () => {
+  describe("AdminTriggerRefundSchema", () => {
     it("validates fully compliant refund payload", () => {
       const payload = {
         customer_id: "CUST-10001",
         amount: 149.99,
         reason: "Duplicate charge on monthly enterprise subscription",
       };
-      const result = TriggerRefundSchema.safeParse(payload);
+      const result = AdminTriggerRefundSchema.safeParse(payload);
       expect(result.success).toBe(true);
     });
 
@@ -79,7 +79,7 @@ describe("Task 1: Zod Schema Input Validation", () => {
         amount: -50.0,
         reason: "Customer requested return for defective product",
       };
-      const result = TriggerRefundSchema.safeParse(payload);
+      const result = AdminTriggerRefundSchema.safeParse(payload);
       expect(result.success).toBe(false);
       if (!result.success) {
         const msg = formatZodError(result.error);
@@ -93,7 +93,7 @@ describe("Task 1: Zod Schema Input Validation", () => {
         amount: 0,
         reason: "Zero dollar adjustment request",
       };
-      const result = TriggerRefundSchema.safeParse(payload);
+      const result = AdminTriggerRefundSchema.safeParse(payload);
       expect(result.success).toBe(false);
       if (!result.success) {
         const msg = formatZodError(result.error);
@@ -107,7 +107,7 @@ describe("Task 1: Zod Schema Input Validation", () => {
         amount: 25.0,
         reason: "Defective", // 9 characters
       };
-      const result = TriggerRefundSchema.safeParse(payload);
+      const result = AdminTriggerRefundSchema.safeParse(payload);
       expect(result.success).toBe(false);
       if (!result.success) {
         const msg = formatZodError(result.error);
@@ -116,13 +116,13 @@ describe("Task 1: Zod Schema Input Validation", () => {
     });
 
     it("rejects missing fields in refund payload", () => {
-      const resultNoReason = TriggerRefundSchema.safeParse({
+      const resultNoReason = AdminTriggerRefundSchema.safeParse({
         customer_id: "CUST-10001",
         amount: 50.0,
       });
       expect(resultNoReason.success).toBe(false);
 
-      const resultNoAmount = TriggerRefundSchema.safeParse({
+      const resultNoAmount = AdminTriggerRefundSchema.safeParse({
         customer_id: "CUST-10001",
         reason: "Detailed explanation of the return reason",
       });

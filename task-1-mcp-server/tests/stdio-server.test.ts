@@ -146,7 +146,7 @@ describe("Task 1: MCP Server STDIO Isolation and Transport Integration", () => {
 
     const toolNames = result.tools.map((t) => t.name);
     expect(toolNames).toContain("get_customer_record");
-    expect(toolNames).toContain("trigger_refund");
+    expect(toolNames).toContain("admin_trigger_refund");
   });
 
   it("successfully retrieves customer record with valid customer_id", async () => {
@@ -199,7 +199,7 @@ describe("Task 1: MCP Server STDIO Isolation and Transport Integration", () => {
       id: 30,
       method: "tools/call",
       params: {
-        name: "trigger_refund",
+        name: "admin_trigger_refund",
         arguments: {
           customer_id: "CUST-10002",
           amount: 50.0,
@@ -220,13 +220,13 @@ describe("Task 1: MCP Server STDIO Isolation and Transport Integration", () => {
     expect(parsed.updated_balance).toBe(800.25);
   });
 
-  it("rejects trigger_refund with negative amount via -32602", async () => {
+  it("rejects admin_trigger_refund with negative amount via -32602", async () => {
     const response = await sendRequest({
       jsonrpc: "2.0",
       id: 31,
       method: "tools/call",
       params: {
-        name: "trigger_refund",
+        name: "admin_trigger_refund",
         arguments: {
           customer_id: "CUST-10002",
           amount: -100.0,
@@ -242,13 +242,13 @@ describe("Task 1: MCP Server STDIO Isolation and Transport Integration", () => {
     expect(response.error?.message).toContain("positive float");
   });
 
-  it("rejects trigger_refund with short reason via -32602", async () => {
+  it("rejects admin_trigger_refund with short reason via -32602", async () => {
     const response = await sendRequest({
       jsonrpc: "2.0",
       id: 32,
       method: "tools/call",
       params: {
-        name: "trigger_refund",
+        name: "admin_trigger_refund",
         arguments: {
           customer_id: "CUST-10002",
           amount: 25.0,
@@ -264,13 +264,13 @@ describe("Task 1: MCP Server STDIO Isolation and Transport Integration", () => {
     expect(response.error?.message).toContain("minimum length of 10 characters");
   });
 
-  it("rejects trigger_refund on suspended account via -32603", async () => {
+  it("rejects admin_trigger_refund on suspended account via -32603", async () => {
     const response = await sendRequest({
       jsonrpc: "2.0",
       id: 33,
       method: "tools/call",
       params: {
-        name: "trigger_refund",
+        name: "admin_trigger_refund",
         arguments: {
           customer_id: "CUST-10003", // Suspended customer
           amount: 10.0,
