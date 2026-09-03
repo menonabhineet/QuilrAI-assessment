@@ -29,39 +29,47 @@ export class McpSecurityGatewayProxy {
     this.forwardedCount = 0;
   }
 
-  private async forwardToDownstream(body: string): Promise<{ status: number; data: string }> {
+  private forwardToDownstream(body: string, clientReqPath: string, clientRes: http.ServerResponse): void {
     this.forwardedCount++;
 
-    return new Promise((resolve, reject) => {
-      const url = new URL(this.downstreamUrl);
-      const reqOptions: http.RequestOptions = {
-        hostname: url.hostname,
-        port: url.port,
-        path: url.pathname,
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Content-Length": Buffer.byteLength(body),
-        },
-      };
+    const url = new URL(this.downstreamUrl);
+    // Preserve client's original req.url path if available and not just root
+    const targetPath = clientReqPath && clientReqPath !== "/" ? clientReqPath : url.pathname;
 
-      const req = http.request(reqOptions, (res) => {
-        let resBody = "";
-        res.on("data", (chunk) => {
-          resBody += chunk.toString("utf8");
-        });
-        res.on("end", () => {
-          resolve({ status: res.statusCode || 200, data: resBody });
-        });
-      });
+    const reqOptions: http.RequestOptions = {
+      hostname: url.hostname,
+      port: url.port,
+      path: targetPath,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(body),
+      },
+    };
 
-      req.on("error", (err) => {
-        reject(err);
-      });
-
-      req.write(body);
-      req.end();
+    const req = http.request(reqOptions, (res) => {
+      clientRes.writeHead(res.statusCode || 200, res.headers);
+      res.pipe(clientRes);
     });
+
+    req.on("error", (err) => {
+      if (!clientRes.headersSent) {
+        clientRes.writeHead(502, { "Content-Type": "application/json" });
+        clientRes.end(
+          JSON.stringify({
+            jsonrpc: "2.0",
+            id: null,
+            error: {
+              code: JSON_RPC_ERRORS.INTERNAL_ERROR,
+              message: `Downstream service unreachable: ${err.message}`,
+            },
+          })
+        );
+      }
+    });
+
+    req.write(body);
+    req.end();
   }
 
   async start(): Promise<number> {
@@ -94,13 +102,26 @@ export class McpSecurityGatewayProxy {
           return;
         }
 
-        // 2. Read request body
+        // 2. Read request body with 2MB limit to prevent OOM DoS
         let rawBody = "";
+        let bodyLength = 0;
+        const MAX_PAYLOAD_SIZE = 2 * 1024 * 1024; // 2MB
+        let payloadTooLarge = false;
+
         req.on("data", (chunk) => {
+          if (payloadTooLarge) return;
           rawBody += chunk.toString("utf8");
+          bodyLength += chunk.length;
+          if (bodyLength > MAX_PAYLOAD_SIZE) {
+            payloadTooLarge = true;
+            res.writeHead(413, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Payload Too Large: Maximum 2MB allowed" }));
+          }
         });
 
         req.on("end", async () => {
+          if (payloadTooLarge) return;
+
           // 3. Parse JSON-RPC wire format
           let jsonRpc: JsonRpcRequest;
           try {
@@ -125,23 +146,7 @@ export class McpSecurityGatewayProxy {
           // 4. Policy inspection: tools/list vs tools/call
           if (method === "tools/list") {
             // Transparently forward tools/list to downstream
-            try {
-              const downstreamRes = await this.forwardToDownstream(rawBody);
-              res.writeHead(downstreamRes.status, { "Content-Type": "application/json" });
-              res.end(downstreamRes.data);
-            } catch (err) {
-              res.writeHead(502, { "Content-Type": "application/json" });
-              res.end(
-                JSON.stringify({
-                  jsonrpc: "2.0",
-                  id,
-                  error: {
-                    code: JSON_RPC_ERRORS.INTERNAL_ERROR,
-                    message: `Downstream service unreachable: ${(err as Error).message}`,
-                  },
-                })
-              );
-            }
+            this.forwardToDownstream(rawBody, req.url || "/", res);
             return;
           }
 
@@ -168,44 +173,12 @@ export class McpSecurityGatewayProxy {
             }
 
             // User authorized or tool is non-admin: forward to downstream
-            try {
-              const downstreamRes = await this.forwardToDownstream(rawBody);
-              res.writeHead(downstreamRes.status, { "Content-Type": "application/json" });
-              res.end(downstreamRes.data);
-            } catch (err) {
-              res.writeHead(502, { "Content-Type": "application/json" });
-              res.end(
-                JSON.stringify({
-                  jsonrpc: "2.0",
-                  id,
-                  error: {
-                    code: JSON_RPC_ERRORS.INTERNAL_ERROR,
-                    message: `Downstream service unreachable: ${(err as Error).message}`,
-                  },
-                })
-              );
-            }
+            this.forwardToDownstream(rawBody, req.url || "/", res);
             return;
           }
 
           // Any other JSON-RPC method: forward transparently
-          try {
-            const downstreamRes = await this.forwardToDownstream(rawBody);
-            res.writeHead(downstreamRes.status, { "Content-Type": "application/json" });
-            res.end(downstreamRes.data);
-          } catch (err) {
-            res.writeHead(502, { "Content-Type": "application/json" });
-            res.end(
-              JSON.stringify({
-                jsonrpc: "2.0",
-                id,
-                error: {
-                  code: JSON_RPC_ERRORS.INTERNAL_ERROR,
-                  message: `Downstream service unreachable: ${(err as Error).message}`,
-                },
-              })
-            );
-          }
+          this.forwardToDownstream(rawBody, req.url || "/", res);
         });
       });
 
