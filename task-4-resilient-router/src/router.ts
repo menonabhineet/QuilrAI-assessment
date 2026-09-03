@@ -19,11 +19,20 @@ export class ResilientModelRouter {
   private async callProvider(
     url: string,
     payload: CompletionRequest,
-    timeout: number
+    timeout: number,
+    clientSignal?: AbortSignal
   ): Promise<{ status: number; data: any; durationMs: number }> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
     const start = Date.now();
+
+    if (clientSignal) {
+      if (clientSignal.aborted) {
+        controller.abort();
+      } else {
+        clientSignal.addEventListener("abort", () => controller.abort());
+      }
+    }
 
     try {
       const response = await fetch(url, {
@@ -69,11 +78,11 @@ export class ResilientModelRouter {
    * If primary returns 429 or times out, automatically falls back to secondary provider.
    * If both fail, returns a sanitized gateway error payload.
    */
-  async routeCompletion(request: CompletionRequest): Promise<CompletionResponse> {
+  async routeCompletion(request: CompletionRequest, clientSignal?: AbortSignal): Promise<CompletionResponse> {
     const startOverall = Date.now();
 
     // 1. Attempt Primary Provider with 3000ms deadline
-    const primaryRes = await this.callProvider(this.primaryUrl, request, this.timeoutMs);
+    const primaryRes = await this.callProvider(this.primaryUrl, request, this.timeoutMs, clientSignal);
 
     if (primaryRes.status === 200 && primaryRes.data) {
       return {
@@ -102,7 +111,7 @@ export class ResilientModelRouter {
     }
 
     // 2. Trigger Failover to Secondary Provider
-    const secondaryRes = await this.callProvider(this.secondaryUrl, request, 5000);
+    const secondaryRes = await this.callProvider(this.secondaryUrl, request, 5000, clientSignal);
 
     if (secondaryRes.status === 200 && secondaryRes.data) {
       return {

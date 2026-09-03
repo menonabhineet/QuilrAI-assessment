@@ -97,8 +97,15 @@ export class ResilientRouterGatewayServer {
           }
 
           // 4. Resilient Fallback Routing (3000ms primary timeout / 429 failover)
+          const abortController = new AbortController();
+          res.on("close", () => {
+            if (!res.writableEnded) {
+              abortController.abort();
+            }
+          });
+
           try {
-            const completion = await this.router.routeCompletion(requestPayload);
+            const completion = await this.router.routeCompletion(requestPayload, abortController.signal);
 
             res.writeHead(200, {
               "Content-Type": "application/json",

@@ -1,8 +1,9 @@
 import { RateLimiterOptions, RateLimitStatus } from "./types.js";
 
-interface TokenUsageRecord {
-  timestamp: number;
-  tokens: number;
+interface TenantUsage {
+  prevWindowCount: number;
+  currWindowCount: number;
+  currWindowStartTime: number;
 }
 
 /**
@@ -12,7 +13,7 @@ interface TokenUsageRecord {
 export class TokenAwareRateLimiter {
   private readonly limit: number;
   private readonly windowMs: number;
-  private tenantUsage: Map<string, TokenUsageRecord[]> = new Map();
+  private tenantUsage: Map<string, TenantUsage> = new Map();
 
   constructor(options: RateLimiterOptions = {}) {
     this.limit = options.limitTokensPerWindow ?? 50000;
@@ -31,28 +32,51 @@ export class TokenAwareRateLimiter {
     return promptTokens + safeMax;
   }
 
-  private evictExpired(records: TokenUsageRecord[], now: number): TokenUsageRecord[] {
-    const cutoff = now - this.windowMs;
-    return records.filter((rec) => rec.timestamp > cutoff);
-  }
-
   /**
    * Checks whether a tenant has sufficient quota to consume requestedTokens.
    * If allowed, commits the tokens to the sliding window log.
    */
   public checkAndConsume(tenantId: string, requestedTokens: number, now = Date.now()): RateLimitStatus {
-    let records = this.tenantUsage.get(tenantId) || [];
-    records = this.evictExpired(records, now);
+    let record = this.tenantUsage.get(tenantId);
+    if (!record) {
+      record = { prevWindowCount: 0, currWindowCount: 0, currWindowStartTime: now };
+    }
 
-    const currentUsage = records.reduce((sum, r) => sum + r.tokens, 0);
+    // Advance window if needed
+    let elapsed = now - record.currWindowStartTime;
+    if (elapsed >= this.windowMs) {
+      const windowsPassed = Math.floor(elapsed / this.windowMs);
+      if (windowsPassed === 1) {
+        record.prevWindowCount = record.currWindowCount;
+      } else {
+        record.prevWindowCount = 0; // More than 2 windows passed
+      }
+      record.currWindowCount = 0;
+      record.currWindowStartTime += windowsPassed * this.windowMs;
+      elapsed = now - record.currWindowStartTime;
+    }
+
+    const weight = Math.max(0, 1 - (elapsed / this.windowMs));
+    const estimatedUsage = record.prevWindowCount * weight + record.currWindowCount;
+    const currentUsage = Math.ceil(estimatedUsage);
 
     if (currentUsage + requestedTokens > this.limit) {
-      // Calculate how many seconds until the oldest active record expires
-      const oldest = records[0];
-      const resetMs = oldest ? Math.max(0, oldest.timestamp + this.windowMs - now) : this.windowMs;
+      // Calculate how many seconds until fully requested quota is available
+      let resetMs = this.windowMs;
+      if (requestedTokens <= this.limit && record.prevWindowCount > 0) {
+        const requiredWeight = (this.limit - record.currWindowCount - requestedTokens) / record.prevWindowCount;
+        if (requiredWeight >= 0) {
+          const targetElapsed = this.windowMs * (1 - requiredWeight);
+          resetMs = Math.max(0, targetElapsed - elapsed);
+        } else {
+          resetMs = this.windowMs - elapsed;
+        }
+      } else if (requestedTokens <= this.limit) {
+        resetMs = this.windowMs - elapsed;
+      }
+      
       const resetSeconds = Math.max(1, Math.ceil(resetMs / 1000));
-
-      this.tenantUsage.set(tenantId, records);
+      this.tenantUsage.set(tenantId, record);
 
       return {
         allowed: false,
@@ -64,10 +88,10 @@ export class TokenAwareRateLimiter {
     }
 
     // Quota permitted: record consumption
-    records.push({ timestamp: now, tokens: requestedTokens });
-    this.tenantUsage.set(tenantId, records);
+    record.currWindowCount += requestedTokens;
+    this.tenantUsage.set(tenantId, record);
 
-    const newUsage = currentUsage + requestedTokens;
+    const newUsage = Math.ceil(record.prevWindowCount * weight + record.currWindowCount);
     return {
       allowed: true,
       currentUsage: newUsage,

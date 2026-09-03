@@ -58,8 +58,8 @@ describe("Task 4: Rate-Limiting & Model Fallback Router", () => {
       const immediateCheck = rateLimiter.checkAndConsume("tenant-1", 100);
       expect(immediateCheck.allowed).toBe(false);
 
-      // Wait for window to expire (1050ms)
-      await new Promise((r) => setTimeout(r, 1050));
+      // Wait for two windows to fully clear the O(1) sliding counter (2050ms)
+      await new Promise((r) => setTimeout(r, 2050));
 
       const afterExpiryCheck = rateLimiter.checkAndConsume("tenant-1", 500);
       expect(afterExpiryCheck.allowed).toBe(true);

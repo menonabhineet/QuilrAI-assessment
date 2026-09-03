@@ -39,9 +39,9 @@ quilrai-assessment/
 | Task | Component | Key Capabilities | Port / Transport | Tests Passing |
 |---|---|---|---|---|
 | **Task 1** | MCP Server | Stdio isolation, Zod schemas, JSON-RPC -32602/-32603 | Stdio (JSON-RPC) | 18 passing |
-| **Task 2** | MCP Security Gateway | Bearer token auth, role-based tool filtering (-32001) | HTTP (8200 proxy -> 8201 mcp) | 12 passing |
-| **Task 3** | Streaming Guardrail | O(1) rolling window, Email/SSN/Card boundary redaction | HTTP SSE (8080 proxy -> 8081 llm) | 13 passing |
-| **Task 4** | Resilient Model Router | 50k tokens/min rate limiter, 3000ms timeout failover | HTTP (8300 router -> 8301/8302) | 14 passing |
+| **Task 2** | MCP Security Gateway | Bearer token auth, role-based tool filtering, 2MB DoS payload limit | HTTP (8200 proxy -> 8201 mcp) | 12 passing |
+| **Task 3** | Streaming Guardrail | O(1) rolling window, SSE protocol-aware redaction, boundary handling | HTTP SSE (8080 proxy -> 8081 llm) | 13 passing |
+| **Task 4** | Resilient Model Router | O(1) sliding window counter, 3s timeout failover, disconnect hooks | HTTP (8300 router -> 8301/8302) | 14 passing |
 | **Task 5** | Zero-Trust Playbook | Packet triage, root cause decision tree, transport redesign | Enterprise Architecture Doc | N/A |
 | **Total** | **Full Monorepo** | **Production-grade, zero external API dependencies** | **5 Active Services** | **57 passing** |
 
@@ -62,13 +62,14 @@ quilrai-assessment/
 - **Role-Based Access Control**:
   - `Admin` role (`Bearer admin-secret-token`): Permitted to execute all tools including sensitive administrative functions.
   - `Viewer` role (`Bearer viewer-secret-token`): Permitted read-only access (`get_customer_record`, `tools/list`), but prohibited from executing administrative tools (`admin_*`, `trigger_refund`).
-- **Wire Interception**: Unprivileged callers attempting to call restricted tools receive JSON-RPC error code `-32001` (Unauthorized) with zero downstream traffic generated.
+- **Wire Interception & Memory Limits**: Unprivileged callers attempting to call restricted tools receive JSON-RPC error code `-32001` (Unauthorized) with zero downstream traffic generated. Additionally enforces a 2MB DoS payload limit and streams downstream responses via `pipe()` to prevent memory exhaustion.
 - **Automated Tests**: 12 tests validating token authentication, admin tool authorization, and viewer tool rejection.
 
 ### Task 3: LLM Gateway Streaming Guardrail (PII Redaction)
 - **Path**: `task-3-streaming-guardrail/`
 - **Specification**: High-throughput streaming proxy that redacts Emails, SSNs, and Credit Card numbers in real time.
-- **O(1) Bounded Rolling Window**:
+- **O(1) Bounded Rolling Window & SSE Parsing**:
+  - Operates strictly on Server-Sent Events (SSE) JSON deltas, rather than corrupting raw TCP chunks.
   - Does NOT buffer full LLM responses in memory.
   - Maintains a small 48-character sliding window buffer for ambiguous trailing tokens.
   - Delivers safe prefixes immediately to the client to preserve low Time To First Token (TTFT < 40ms).
@@ -78,12 +79,13 @@ quilrai-assessment/
 ### Task 4: Rate-Limiting & Model Fallback Router
 - **Path**: `task-4-resilient-router/`
 - **Specification**: Resilient model completion gateway with per-tenant rate limiting and automatic model failover.
-- **Token-Aware Sliding Window Rate Limiting**:
-  - Tracks timestamped consumption per tenant API key (default: 50,000 tokens/minute).
-  - Uses lazy microsecond eviction of expired entries.
+- **O(1) Token-Aware Sliding Window Rate Limiting**:
+  - Tracks timestamped consumption per tenant API key (default: 50,000 tokens/minute) using an O(1) sliding window counter.
+  - Dynamically calculates `Retry-After` reset seconds based on quota availability.
   - Returns HTTP 429 Too Many Requests with standard headers (`Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`).
-- **Resilient Fallback Mechanics**:
+- **Resilient Fallback & Lifecycle Hooks**:
   - Primary model request races against a strict 3000ms deadline using `AbortController`.
+  - Attaches `req.on("close")` listener to trigger `AbortController` and immediately cancel upstream LLM generation if the client disconnects.
   - Automatically fails over to secondary backup model if primary returns HTTP 429 or times out at 3000ms.
   - Sanitizes error payloads (HTTP 502) if both providers fail, preventing exposure of internal URLs or stack traces.
 - **Automated Tests**: 14 tests verifying rate limits, 3000ms timeout fallback, primary 429 failover, connection refused handling, and error sanitization.
