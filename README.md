@@ -10,6 +10,11 @@ This repository provides robust, runnable solutions for all five assessment task
 
 ```
 quilrai-assessment/
+├── docs/                             # Interactive GitHub Pages Architecture Visualizer
+│   ├── index.html                    # Single-page dashboard shell
+│   ├── styles.css                    # Glassmorphic dark theme design system
+│   ├── app.js                        # Client state and tab router
+│   └── modules/                      # Task 1-5 algorithmic simulation modules
 ├── task-1-mcp-server/             # Task 1: MCP Server with strict validation and stdio isolation
 │   ├── src/                       # Official @modelcontextprotocol/sdk implementation
 │   ├── tests/                     # 23 unit and stdio child process integration tests
@@ -40,10 +45,10 @@ quilrai-assessment/
 |---|---|---|---|---|
 | **Task 1** | MCP Server | Stdio isolation, Zod schemas, JSON-RPC -32602/-32603 | Stdio (JSON-RPC) | 23 passing |
 | **Task 2** | MCP Security Gateway | Bearer token auth, role-based tool filtering, 2MB DoS payload limit | HTTP (8100 proxy -> 8101 mcp) | 17 passing |
-| **Task 3** | Streaming Guardrail | O(1) rolling window, SSE multi-schema deltas, [DONE] flush ordering | HTTP SSE (8200 gateway -> 8201 llm) | 15 passing |
+| **Task 3** | Streaming Guardrail | O(1) rolling window, SSE multi-schema deltas, [DONE] flush ordering | HTTP SSE (8200 gateway -> 8201 llm) | 16 passing |
 | **Task 4** | Resilient Model Router | Token rate limiter, tenant TTL eviction, 3s timeout failover | HTTP (8300 router -> 8301/8302) | 21 passing |
 | **Task 5** | Zero-Trust Playbook | Packet triage, root cause decision tree, transport redesign | Enterprise Architecture Doc | N/A |
-| **Total** | **Full Monorepo** | **Production-grade, zero external API dependencies** | **5 Active Services** | **76 passing** |
+| **Total** | **Full Monorepo** | **Production-grade, zero external API dependencies** | **5 Active Services** | **77 passing** |
 
 ---
 
@@ -76,7 +81,7 @@ quilrai-assessment/
   - Flushes safe trailing tokens before emitting the terminal `data: [DONE]` sentinel.
   - Aborts upstream token generation when client disconnects prematurely.
 - **Token Boundary Handling**: Catches sensitive patterns split across multiple chunks, such as email addresses split before the `@` symbol (e.g. `"john.doe"` in Chunk 1 and `"@gmail.com"` in Chunk 2).
-- **Automated Tests**: 15 tests verifying regex redaction, boundary splits, chunk streaming, OpenAI delta schemas, and terminal sentinel ordering.
+- **Automated Tests**: 16 tests verifying regex redaction, boundary splits, chunk streaming, OpenAI delta schemas, and terminal sentinel ordering.
 
 ### Task 4: Rate-Limiting & Model Fallback Router
 - **Path**: `task-4-resilient-router/`
@@ -249,4 +254,24 @@ curl -X POST http://127.0.0.1:8300 \
 ## 7. Operational Standards & Architecture Principles
 
 - **Pure Stdio Isolation**: In MCP stdio implementations, stdout is exclusively reserved for JSON-RPC frames, with all diagnostic logs directed to stderr.
-- **Comprehensive Automated Testing**: 76 automated tests covering schema validation, process transports, auth proxies, sliding window redaction, and timeout races.
+- **Comprehensive Automated Testing**: 77 automated tests covering schema validation, process transports, auth proxies, sliding window redaction, and timeout races.
+
+---
+
+## 8. Interactive Architecture Visualizer (GitHub Pages)
+
+For evaluators and stakeholders who prefer an interactive visual walkthrough of the gateway algorithms, security barriers, and enterprise debugging decision trees, a client-side visualizer is hosted on GitHub Pages:
+
+- **Live URL**: [https://menonabhineet.github.io/QuilrAI-assessment/](https://menonabhineet.github.io/QuilrAI-assessment/)
+- **Source Directory**: `/docs` (served directly via GitHub Pages on the `main` branch)
+- **Local Preview Command**:
+  ```bash
+  npm run serve:docs
+  ```
+
+### Interactive Modules & Algorithmic Simulations
+- **Task 1 MCP Server**: Live Zod parameter validation and dual-channel terminal demonstrating strict stdio isolation (`stdout` exclusively for JSON-RPC, `stderr` for application logs).
+- **Task 2 Security Gateway**: Bearer token RBAC testing (Admin vs Viewer), JSON-RPC `-32001 Unauthorized` tool execution interception, and 2MB DoS memory safeguard rejection.
+- **Task 3 Streaming Guardrail**: Real-time 48-character sliding window buffer simulation catching split-token PII (email, SSN, credit cards) across SSE chunks with sub-40ms TTFT and terminal `[DONE]` sentinel flush safety.
+- **Task 4 Resilient Router**: O(1) 60-second sliding window token rate limiting, HTTP 429 backoff calculations, and 3000ms deadline failover state machine.
+- **Task 5 Zero-Trust Triage**: Clickable diagnostic triage decision tree with simulated packet traces (`tcpdump`, `curl -Iv`, `openssl s_client`) and production blueprints.

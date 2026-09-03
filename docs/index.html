@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Interactive Architecture & Algorithmic Playground for QuilrAI FDE Assessment: MCP Servers, Security Gateways, Streaming PII Guardrails, Resilient Routers, and Zero-Trust Debugging.">
+  <meta name="theme-color" content="#07090e">
+  <title>QuilrAI FDE Assessment: MCP & LLM Gateways Interactive Visualizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-background">
+    <div class="glow glow-1"></div>
+    <div class="glow glow-2"></div>
+    <div class="glow glow-3"></div>
+  </div>
+
+  <!-- Header & Navigation Bar -->
+  <header class="app-header" id="main-header">
+    <div class="header-container">
+      <div class="brand-group">
+        <div class="brand-logo">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+            <polyline points="2 17 12 22 22 17"></polyline>
+            <polyline points="2 12 12 17 22 12"></polyline>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">QuilrAI <span class="highlight">FDE Assessment</span></h1>
+          <p class="brand-subtitle">MCP & LLM Gateways Monorepo: Interactive Visualizer</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div class="badge-status">
+          <span class="pulse-dot"></span>
+          <span id="test-counter-badge">77 / 77 Tests Passing</span>
+        </div>
+        <a href="https://github.com/menonabhineet/QuilrAI-assessment" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" id="btn-view-github">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+          GitHub Repository
+        </a>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-bar" id="main-nav" aria-label="Main Navigation">
+      <div class="nav-wrapper">
+        <button class="nav-scroll-btn nav-scroll-left" id="btn-scroll-left" aria-label="Scroll tabs left" title="Scroll Left">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
+
+        <div class="nav-container" id="nav-tabs-container">
+          <div class="nav-slider-indicator" id="nav-slider-indicator"></div>
+          <button class="nav-tab active" id="tab-overview" data-target="panel-overview" data-index="0">
+            <span class="tab-icon">&#9632;</span>
+            <span class="tab-title">Architecture & Tests</span>
+            <span class="tab-pill">Overview</span>
+          </button>
+          <button class="nav-tab" id="tab-task1" data-target="panel-task1" data-index="1">
+            <span class="tab-icon">01</span>
+            <span class="tab-title">MCP Server</span>
+            <span class="tab-pill">Stdio Isolation</span>
+          </button>
+          <button class="nav-tab" id="tab-task2" data-target="panel-task2" data-index="2">
+            <span class="tab-icon">02</span>
+            <span class="tab-title">Security Gateway</span>
+            <span class="tab-pill">RBAC Proxy</span>
+          </button>
+          <button class="nav-tab" id="tab-task3" data-target="panel-task3" data-index="3">
+            <span class="tab-icon">03</span>
+            <span class="tab-title">Streaming Guardrail</span>
+            <span class="tab-pill">PII Redactor</span>
+          </button>
+          <button class="nav-tab" id="tab-task4" data-target="panel-task4" data-index="4">
+            <span class="tab-icon">04</span>
+            <span class="tab-title">Resilient Router</span>
+            <span class="tab-pill">Rate Limit & Failover</span>
+          </button>
+          <button class="nav-tab" id="tab-task5" data-target="panel-task5" data-index="5">
+            <span class="tab-icon">05</span>
+            <span class="tab-title">Network Debugging</span>
+            <span class="tab-pill">Zero-Trust Triage</span>
+          </button>
+        </div>
+
+        <button class="nav-scroll-btn nav-scroll-right" id="btn-scroll-right" aria-label="Scroll tabs right" title="Scroll Right">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Main Content Container with Tab Panels -->
+  <main class="app-main" id="main-content">
+    <!-- Panel: Overview -->
+    <section class="tab-panel active" id="panel-overview" aria-labelledby="tab-overview"></section>
+
+    <!-- Panel: Task 1 (MCP Stdio Server) -->
+    <section class="tab-panel" id="panel-task1" aria-labelledby="tab-task1"></section>
+
+    <!-- Panel: Task 2 (MCP Security Gateway) -->
+    <section class="tab-panel" id="panel-task2" aria-labelledby="tab-task2"></section>
+
+    <!-- Panel: Task 3 (Streaming Guardrail) -->
+    <section class="tab-panel" id="panel-task3" aria-labelledby="tab-task3"></section>
+
+    <!-- Panel: Task 4 (Resilient Router) -->
+    <section class="tab-panel" id="panel-task4" aria-labelledby="tab-task4"></section>
+
+    <!-- Panel: Task 5 (Zero-Trust Debugging) -->
+    <section class="tab-panel" id="panel-task5" aria-labelledby="tab-task5"></section>
+  </main>
+
+  <!-- Global Footer -->
+  <footer class="app-footer">
+    <div class="footer-container">
+      <div class="footer-left">
+        <p>QuilrAI Forward Deployed Engineer (FDE) Assessment Technical Solution.</p>
+        <p class="text-muted">Built for zero external API dependencies, strict stdio isolation, and sub-40ms streaming guardrails.</p>
+      </div>
+      <div class="footer-right">
+        <span class="footer-tag">All 77 Vitest Automated Tests Passing</span>
+        <span class="footer-tag">Branch: main</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Notification Toast Container -->
+  <div class="toast-container" id="toast-container" aria-live="polite"></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
